@@ -49,14 +49,14 @@ Route::prefix('v1')->group(function () {
         Route::delete('/push/unsubscribe', [PushSubscriptionController::class, 'destroy']);
 
         // ─── Super Admin ──────────────────────────────────────────────────
-        Route::middleware('perfil:super_admin')->prefix('super-admin')->group(function () {
+        Route::middleware('perfil:super_admin')->prefix('super-admin')->name('super-admin.')->group(function () {
             Route::apiResource('/empresas', SuperAdminEmpresasController::class);
             Route::apiResource('/usuarios', SuperAdminUsuariosController::class);
             Route::apiResource('/planos',   SuperAdminPlanosController::class);
         });
 
         // ─── Admin ────────────────────────────────────────────────────────
-        Route::middleware('perfil:admin')->prefix('admin')->group(function () {
+        Route::middleware('perfil:admin')->prefix('admin')->name('admin.')->group(function () {
 
             // Empresa
             Route::get('/empresa', [AdminEmpresaController::class, 'show']);
@@ -86,7 +86,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // ─── Gestor ───────────────────────────────────────────────────────
-        Route::middleware('perfil:gestor,admin')->prefix('gestor')->group(function () {
+        Route::middleware('perfil:gestor,admin')->prefix('gestor')->name('gestor.')->group(function () {
 
             Route::get('/setor', [GestorSetorController::class, 'show']);
             Route::put('/setor', [GestorSetorController::class, 'update']);

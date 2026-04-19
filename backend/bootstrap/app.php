@@ -8,8 +8,6 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\ThrottleRequests;
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Cache\RateLimiting\Limit;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -17,19 +15,6 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
-        then: function (): void {
-            RateLimiter::for('login', fn (Request $req) =>
-                Limit::perMinute(10)->by($req->ip())
-            );
-
-            RateLimiter::for('api', fn (Request $req) =>
-                Limit::perMinute(120)->by($req->user()?->id ?? $req->ip())
-            );
-
-            RateLimiter::for('foto', fn (Request $req) =>
-                Limit::perMinute(30)->by($req->user()?->id ?? $req->ip())
-            );
-        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
