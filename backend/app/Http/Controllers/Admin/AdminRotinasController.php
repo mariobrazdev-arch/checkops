@@ -8,20 +8,26 @@ use App\Http\Requests\Rotina\UpdateRotinaRequest;
 use App\Http\Resources\RotinaResource;
 use App\Models\Rotina;
 use App\Services\RotinaService;
+use App\Traits\ResolvesEmpresaId;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class AdminRotinasController extends Controller
 {
+    use ResolvesEmpresaId;
+
     public function __construct(private RotinaService $service) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
         $this->authorize('viewAny', Rotina::class);
 
+        $filtros = $request->only(['setor_id', 'status', 'frequencia', 'busca', 'per_page']);
+        $filtros['empresa_id'] = $this->resolveEmpresaId($request);
+
         return RotinaResource::collection(
-            $this->service->listar($request->user(), $request->only(['setor_id', 'status', 'frequencia', 'busca', 'per_page']))
+            $this->service->listar($request->user(), $filtros)
         );
     }
 
@@ -29,7 +35,10 @@ class AdminRotinasController extends Controller
     {
         $this->authorize('create', Rotina::class);
 
-        $rotina = $this->service->criar($request->user(), $request->validated());
+        $dados = $request->validated();
+        $dados['empresa_id'] = $this->resolveEmpresaId($request);
+
+        $rotina = $this->service->criar($request->user(), $dados);
         return response()->json(['data' => new RotinaResource($rotina->load(['setor', 'colaboradores']))], 201);
     }
 
@@ -65,4 +74,3 @@ class AdminRotinasController extends Controller
         ]);
     }
 }
-

@@ -21,6 +21,13 @@ class Empresa extends Model
         'responsavel',
         'plano_id',
         'status',
+        'cep',
+        'logradouro',
+        'numero',
+        'complemento',
+        'bairro',
+        'cidade',
+        'estado',
     ];
 
     protected function casts(): array

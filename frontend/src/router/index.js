@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth.store.js'
+import { useSuperAdminContextStore } from '../stores/superAdminContext.store.js'
 
 // Páginas — lazy-loaded
 const LoginPage           = () => import('../pages/auth/LoginPage.vue')
@@ -11,8 +12,10 @@ const AdminEmpresa        = () => import('../pages/admin/AdminEmpresa.vue')
 const AdminSetores        = () => import('../pages/admin/AdminSetores.vue')
 const AdminUsuarios       = () => import('../pages/admin/AdminUsuarios.vue')
 const AdminRotinas        = () => import('../pages/admin/AdminRotinas.vue')
-const AdminAuditoria      = () => import('../pages/admin/AdminAuditoria.vue')
-const AdminRelatorios     = () => import('../pages/admin/AdminRelatorios.vue')
+const AdminAuditoria         = () => import('../pages/admin/AdminAuditoria.vue')
+const AdminRelatorios        = () => import('../pages/admin/AdminRelatorios.vue')
+const AdminAcompanhamento    = () => import('../pages/admin/AdminAcompanhamento.vue')
+const AdminValidacao         = () => import('../pages/admin/AdminValidacao.vue')
 
 const GestorDashboard     = () => import('../pages/gestor/GestorDashboard.vue')
 const GestorUsuarios      = () => import('../pages/admin/AdminUsuarios.vue') // reusa AdminUsuarios
@@ -67,8 +70,10 @@ const routes = [
       { path: 'usuarios',   name: 'admin.usuarios',   component: AdminUsuarios },
       { path: 'rotinas',    name: 'admin.rotinas',    component: AdminRotinas },
       { path: 'auditoria',  name: 'admin.auditoria',  component: AdminAuditoria  },
-      { path: 'relatorios', name: 'admin.relatorios', component: AdminRelatorios },
-      { path: 'perfil',     name: 'admin.perfil',     component: MeuPerfil },
+      { path: 'relatorios',     name: 'admin.relatorios',     component: AdminRelatorios },
+      { path: 'acompanhamento', name: 'admin.acompanhamento', component: AdminAcompanhamento },
+      { path: 'validacao',      name: 'admin.validacao',      component: AdminValidacao },
+      { path: 'perfil',         name: 'admin.perfil',         component: MeuPerfil },
       // Meu Setor — admin com setor_id atribuído opera como gestor
       { path: 'meu-setor/acompanhamento', name: 'admin.meu-setor.acompanhamento', component: GestorAcompanhamento },
       { path: 'meu-setor/validacao',      name: 'admin.meu-setor.validacao',      component: GestorValidacao },
@@ -136,6 +141,13 @@ router.beforeEach(async (to) => {
       localStorage.removeItem('token')
       return '/login'
     }
+  }
+
+  // Super admin pode acessar rotas /admin quando tem contexto de empresa ativo
+  if (authStore.user?.perfil === 'super_admin' && to.path.startsWith('/admin')) {
+    const ctxStore = useSuperAdminContextStore()
+    if (!ctxStore.empresaId) return '/super-admin/empresas'
+    return true
   }
 
   // Perfil errado → 403

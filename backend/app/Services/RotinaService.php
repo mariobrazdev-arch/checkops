@@ -13,6 +13,13 @@ class RotinaService
     {
         $query = Rotina::with(['setor', 'colaboradores']);
 
+        // Escopa por empresa (via filtro explícito ou pelo usuário)
+        if (!empty($filtros['empresa_id'])) {
+            $query->where('empresa_id', $filtros['empresa_id']);
+        } elseif ($user->empresa_id) {
+            $query->where('empresa_id', $user->empresa_id);
+        }
+
         if ($user->perfil === 'gestor') {
             $query->where('setor_id', $user->setor_id);
         }
@@ -42,7 +49,8 @@ class RotinaService
             $dados['setor_id'] = $user->setor_id;
         }
 
-        $dados['empresa_id'] = $user->empresa_id;
+        // empresa_id pode vir pré-injetado pelo controller (caso super_admin)
+        $dados['empresa_id'] = $dados['empresa_id'] ?? $user->empresa_id;
         $dados['status']     = 'ativa';
 
         $colaboradorIds = $dados['colaborador_ids'] ?? [];

@@ -93,6 +93,7 @@ function fmtData(str) {
           </a>
         </h3>
         <FotoViewer
+          :fotos="rotina.fotos?.length ? rotina.fotos : null"
           :foto-url="rotina.foto_url"
           :foto-timestamp="rotina.foto_timestamp"
           :device-id="rotina.foto_device_id"

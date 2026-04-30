@@ -38,17 +38,17 @@ class DashboardService
     /**
      * US-18 — Dashboard para admin: visão consolidada da empresa.
      */
-    public function admin(User $admin, array $filtros): array
+    public function admin(string $empresaId, array $filtros): array
     {
-        $cacheKey = "dashboard:admin:{$admin->empresa_id}:"
+        $cacheKey = "dashboard:admin:{$empresaId}:"
             . ($filtros['periodo'] ?? 'hoje')
             . ':' . ($filtros['setor_id'] ?? 'all');
 
-        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($admin, $filtros) {
+        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($empresaId, $filtros) {
             [$inicio, $fim] = $this->resolverPeriodo($filtros['periodo'] ?? 'hoje');
 
             $base = RotinaDiaria::query()
-                ->whereHas('rotina', fn ($q) => $q->where('empresa_id', $admin->empresa_id));
+                ->whereHas('rotina', fn ($q) => $q->where('empresa_id', $empresaId));
 
             if (!empty($filtros['setor_id'])) {
                 $base->whereHas('rotina', fn ($q) => $q->where('setor_id', $filtros['setor_id']));
@@ -57,17 +57,17 @@ class DashboardService
             $base->whereBetween('data', [$inicio->toDateString(), $fim->toDateString()]);
 
             // Histórico diário — últimos 30 dias (sempre — ignora filtro periodo)
-            $historicoDiario = $this->historicoDiario($admin->empresa_id, $filtros['setor_id'] ?? null);
+            $historicoDiario = $this->historicoDiario($empresaId, $filtros['setor_id'] ?? null);
 
             return [
                 'resumo'                     => $this->resumo($base->clone()),
                 'conformidade_colaboradores' => $this->conformidadeColaboradores($base->clone(), null, 10),
                 'rotinas_criticas'           => $this->rotinasCriticas($base->clone(), 5),
                 'justificativas_frequentes'  => $this->justificativasFrequentes($base->clone(), 5),
-                'conformidade_por_setor'     => $this->conformidadePorSetor($admin->empresa_id, $inicio, $fim),
+                'conformidade_por_setor'     => $this->conformidadePorSetor($empresaId, $inicio, $fim),
                 'historico_diario'           => $historicoDiario,
-                'ranking_setores'            => $this->rankingSetores($admin->empresa_id, $inicio, $fim),
-                'ranking_colaboradores'      => $this->rankingColaboradores($admin->empresa_id, $inicio, $fim, 10),
+                'ranking_setores'            => $this->rankingSetores($empresaId, $inicio, $fim),
+                'ranking_colaboradores'      => $this->rankingColaboradores($empresaId, $inicio, $fim, 10),
             ];
         });
     }

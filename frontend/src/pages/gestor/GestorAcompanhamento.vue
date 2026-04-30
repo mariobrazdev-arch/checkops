@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { validacaoService } from '../../services/validacao.service.js'
 import { usuariosService } from '../../services/usuarios.service.js'
 import { useUiStore } from '../../stores/ui.store.js'
+import FotoViewer from '../../components/shared/FotoViewer.vue'
 
 const uiStore = useUiStore()
 
@@ -189,14 +190,18 @@ onMounted(async () => {
                 <span><i class="pi pi-clock" /> {{ fmtDataHora(selecionada.data_hora_resposta) }}</span>
                 <span v-if="selecionada.foto_lat"><i class="pi pi-map-marker" /> GPS registrado</span>
               </div>
-              <div v-if="selecionada.foto_url" class="foto-wrap">
-                <img :src="selecionada.foto_url" class="foto-full" alt="Foto da rotina" />
-              </div>
+              <FotoViewer
+                :fotos="selecionada.fotos?.length ? selecionada.fotos : null"
+                :foto-url="selecionada.foto_url"
+                :lat="selecionada.foto_lat"
+                :lng="selecionada.foto_lng"
+                :mapa-url="selecionada.mapa_url"
+              />
               <div v-if="selecionada.justificativa" class="justif-box">
                 <p class="justif-label">Justificativa</p>
                 <p class="justif-texto">{{ selecionada.justificativa }}</p>
               </div>
-              <div v-if="!selecionada.foto_url && !selecionada.justificativa" class="sem-evidencia">
+              <div v-if="!selecionada.foto_url && !selecionada.fotos?.length && !selecionada.justificativa" class="sem-evidencia">
                 <i class="pi pi-check-circle" /> Rotina realizada sem foto obrigatória
               </div>
             </div>

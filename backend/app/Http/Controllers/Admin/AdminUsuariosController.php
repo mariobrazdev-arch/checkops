@@ -4,15 +4,20 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\RotinaDiariaService;
+use App\Traits\ResolvesEmpresaId;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
 class AdminUsuariosController extends Controller
 {
+    use ResolvesEmpresaId;
+
     public function index(Request $request): JsonResponse
     {
-        $usuarios = User::with('setor:id,nome')
+        $usuarios = User::where('empresa_id', $this->resolveEmpresaId($request))
+            ->with('setor:id,nome')
             ->when($request->perfil, fn($q) => $q->where('perfil', $request->perfil))
             ->when($request->setor_id, fn($q) => $q->where('setor_id', $request->setor_id))
             ->when($request->status, fn($q) => $q->where('status', $request->status))
@@ -36,12 +41,16 @@ class AdminUsuariosController extends Controller
             'password'  => 'required|string|min:8',
         ]);
 
-        $dados['empresa_id'] = $request->user()->empresa_id;
+        $dados['empresa_id'] = $this->resolveEmpresaId($request);
         $dados['status'] = $dados['status'] ?? 'ativo';
         $dados['password'] = Hash::make($dados['password']);
 
         $usuario = User::create($dados);
         $usuario->load('setor:id,nome');
+
+        if ($dados['perfil'] === 'colaborador') {
+            app(RotinaDiariaService::class)->gerarParaColaboradorHoje($usuario);
+        }
 
         return response()->json(['data' => $usuario, 'message' => 'Usuário criado'], 201);
     }

@@ -1,10 +1,17 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.store.js'
 import { usePWAInstall } from '../composables/usePWAInstall.js'
 
+const router = useRouter()
 const authStore = useAuthStore()
 const { podeInstalar, instalar, dispensar } = usePWAInstall()
+
+async function logout() {
+  await authStore.logout()
+  router.push('/login')
+}
 
 // ── Detecção offline ──────────────────────────────────────────────────────
 const isOffline = ref(!navigator.onLine)
@@ -55,6 +62,9 @@ onBeforeUnmount(() => {
       <div class="header-logo" aria-label="CheckOps · Check-in de Operações">
         <span class="logo-check" aria-hidden="true">CHECK</span><span class="logo-ops" aria-hidden="true">OPS</span>
       </div>
+      <button class="btn-logout" @click="logout" aria-label="Sair">
+        <i class="pi pi-sign-out" />
+      </button>
     </header>
 
     <main class="content" id="main-content">
@@ -189,6 +199,27 @@ onBeforeUnmount(() => {
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.05em;
+}
+
+.btn-logout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  min-height: 44px;
+  min-width: 44px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.btn-logout:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
 }
 
 .logo-check {

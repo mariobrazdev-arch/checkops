@@ -8,7 +8,9 @@ export const useUiStore = defineStore('ui', () => {
   const loadingGlobal = ref(false)
 
   function addToast({ severity = 'info', summary, detail, life = 3000 }) {
-    toasts.value.push({ severity, summary, detail, life, id: Date.now() })
+    const id = Date.now()
+    toasts.value.push({ severity, summary, detail, life, id })
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { severity, summary, detail, life } }))
   }
 
   function removeToast(id) {

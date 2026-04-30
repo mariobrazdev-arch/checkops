@@ -9,22 +9,127 @@ const authStore = useAuthStore()
 const uiStore = useUiStore()
 const push = usePushNotifications()
 
-// Dados do perfil
+// ─── Foto de perfil ──────────────────────────────────────────────────────────
+const fotoUrl = ref(authStore.user?.foto_perfil_url ?? null)
+const fotoInput = ref(null)
+const enviandoFoto = ref(false)
+
+function abrirSeletorFoto() {
+  fotoInput.value?.click()
+}
+
+async function comprimirParaBase64(arquivo) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(arquivo)
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Falha ao carregar imagem')) }
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const MAX = 800
+      let w = img.width, h = img.height
+      if (w > MAX || h > MAX) {
+        const r = Math.min(MAX / w, MAX / h)
+        w = Math.round(w * r)
+        h = Math.round(h * r)
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      const base64 = canvas.toDataURL('image/jpeg', 0.75)
+      if (!base64 || base64 === 'data:,') { reject(new Error('Falha ao converter imagem')); return }
+      resolve(base64)
+    }
+    img.src = url
+  })
+}
+
+async function onFotoSelecionada(e) {
+  const arquivo = e.target.files?.[0]
+  if (!arquivo) return
+  enviandoFoto.value = true
+  try {
+    const base64 = await comprimirParaBase64(arquivo)
+    const { data } = await authService.uploadFotoPerfil(base64)
+    fotoUrl.value = data.data.foto_perfil_url
+    authStore.user = { ...authStore.user, foto_perfil_url: data.data.foto_perfil_url }
+    uiStore.addToast({ severity: 'success', summary: 'Foto atualizada', life: 2500 })
+  } catch (err) {
+    uiStore.addToast({ severity: 'error', summary: 'Erro ao enviar foto', detail: err?.response?.data?.message ?? err?.message, life: 4000 })
+  } finally {
+    enviandoFoto.value = false
+    e.target.value = ''
+  }
+}
+
+async function removerFoto() {
+  enviandoFoto.value = true
+  try {
+    await authService.removerFotoPerfil()
+    fotoUrl.value = null
+    authStore.user = { ...authStore.user, foto_perfil_url: null }
+    uiStore.addToast({ severity: 'info', summary: 'Foto removida', life: 2500 })
+  } catch {
+    uiStore.addToast({ severity: 'error', summary: 'Erro ao remover foto', life: 3000 })
+  } finally {
+    enviandoFoto.value = false
+  }
+}
+
+// ─── Dados pessoais ──────────────────────────────────────────────────────────
 const dadosSalvando = ref(false)
 const dadosSucesso = ref(false)
 const dadosErro = ref('')
 const dados = reactive({
-  nome: authStore.user?.nome ?? '',
-  email: authStore.user?.email ?? '',
-  telefone: authStore.user?.telefone ?? '',
+  nome:            authStore.user?.nome ?? '',
+  email:           authStore.user?.email ?? '',
+  telefone:        authStore.user?.telefone ?? '',
+  cpf:             authStore.user?.cpf ?? '',
+  sexo:            authStore.user?.sexo ?? '',
+  data_nascimento: authStore.user?.data_nascimento ?? '',
 })
+
+const opcoesSexo = [
+  { label: 'Masculino',          value: 'masculino'     },
+  { label: 'Feminino',           value: 'feminino'      },
+  { label: 'Outro',              value: 'outro'         },
+  { label: 'Prefiro não informar', value: 'nao_informado' },
+]
+
+function onTelefoneInput(e) {
+  const num = e.target.value.replace(/\D/g, '').slice(0, 11)
+  if (num.length <= 10) {
+    dados.telefone = num
+      .replace(/^(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{4})(\d{1,4})$/, '$1-$2')
+  } else {
+    dados.telefone = num
+      .replace(/^(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{5})(\d{1,4})$/, '$1-$2')
+  }
+}
+
+function onCpfInput(e) {
+  const num = e.target.value.replace(/\D/g, '').slice(0, 11)
+  dados.cpf = num
+    .replace(/^(\d{3})(\d)/, '$1.$2')
+    .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1-$2')
+}
 
 async function salvarDados() {
   dadosErro.value = ''
   dadosSucesso.value = false
   dadosSalvando.value = true
   try {
-    await authStore.updatePerfil({ nome: dados.nome, email: dados.email, telefone: dados.telefone })
+    const { data } = await authService.updatePerfil({
+      nome:            dados.nome,
+      email:           dados.email,
+      telefone:        dados.telefone ? dados.telefone.replace(/\D/g, '') : null,
+      cpf:             dados.cpf ? dados.cpf.replace(/\D/g, '') : null,
+      sexo:            dados.sexo || null,
+      data_nascimento: dados.data_nascimento || null,
+    })
+    authStore.user = { ...authStore.user, ...data.data }
     dadosSucesso.value = true
     uiStore.addToast({ severity: 'success', summary: 'Perfil atualizado', life: 2500 })
     setTimeout(() => { dadosSucesso.value = false }, 3000)
@@ -35,7 +140,7 @@ async function salvarDados() {
   }
 }
 
-// Troca de senha
+// ─── Troca de senha ──────────────────────────────────────────────────────────
 const senhaForm = reactive({
   senha_atual: '',
   nova_senha: '',
@@ -115,21 +220,97 @@ async function togglePush() {
       <span class="badge-perfil">{{ labelPerfil[authStore.user?.perfil] }}</span>
     </div>
 
+    <!-- Foto de perfil -->
+    <section class="card">
+      <h2 class="card-titulo">Foto de perfil</h2>
+      <div class="foto-area">
+        <div class="avatar" :class="{ 'avatar--loading': enviandoFoto }">
+          <img v-if="fotoUrl" :src="fotoUrl" alt="Foto de perfil" class="avatar-img" />
+          <span v-else class="avatar-inicial">{{ authStore.user?.nome?.[0]?.toUpperCase() ?? '?' }}</span>
+          <div v-if="enviandoFoto" class="avatar-overlay">
+            <span class="spinner-foto" />
+          </div>
+        </div>
+        <div class="foto-acoes">
+          <button type="button" class="btn-secondary" @click="abrirSeletorFoto" :disabled="enviandoFoto">
+            <i class="pi pi-camera" />
+            {{ fotoUrl ? 'Trocar foto' : 'Adicionar foto' }}
+          </button>
+          <button
+            v-if="fotoUrl"
+            type="button"
+            class="btn-remover"
+            @click="removerFoto"
+            :disabled="enviandoFoto"
+          >
+            <i class="pi pi-trash" />
+            Remover
+          </button>
+        </div>
+        <input
+          ref="fotoInput"
+          type="file"
+          accept="image/*"
+          capture="user"
+          class="input-oculto"
+          @change="onFotoSelecionada"
+        />
+      </div>
+    </section>
+
     <!-- Dados pessoais -->
     <section class="card">
       <h2 class="card-titulo">Dados pessoais</h2>
       <form class="form" @submit.prevent="salvarDados" novalidate>
-        <div class="field">
-          <label for="nome">Nome completo</label>
-          <input id="nome" v-model="dados.nome" type="text" required />
-        </div>
-        <div class="field">
-          <label for="email">E-mail</label>
-          <input id="email" v-model="dados.email" type="email" required />
-        </div>
-        <div class="field">
-          <label for="telefone">Telefone <span class="label-opcional">(opcional)</span></label>
-          <input id="telefone" v-model="dados.telefone" type="tel" placeholder="(00) 00000-0000" />
+        <div class="form-grid">
+          <div class="field field--full">
+            <label for="nome">Nome completo</label>
+            <input id="nome" v-model="dados.nome" type="text" required />
+          </div>
+          <div class="field field--full">
+            <label for="email">E-mail</label>
+            <input id="email" v-model="dados.email" type="email" required />
+          </div>
+          <div class="field">
+            <label for="telefone">Telefone <span class="label-opcional">(opcional)</span></label>
+            <input
+              id="telefone"
+              :value="dados.telefone"
+              type="tel"
+              placeholder="(00) 00000-0000"
+              inputmode="numeric"
+              maxlength="15"
+              @input="onTelefoneInput"
+            />
+          </div>
+          <div class="field">
+            <label for="cpf">CPF <span class="label-opcional">(opcional)</span></label>
+            <input
+              id="cpf"
+              :value="dados.cpf"
+              type="text"
+              placeholder="000.000.000-00"
+              inputmode="numeric"
+              maxlength="14"
+              @input="onCpfInput"
+            />
+          </div>
+          <div class="field">
+            <label for="sexo">Sexo <span class="label-opcional">(opcional)</span></label>
+            <select id="sexo" v-model="dados.sexo" class="input-select">
+              <option value="">Não informado</option>
+              <option v-for="op in opcoesSexo" :key="op.value" :value="op.value">{{ op.label }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="data-nasc">Data de nascimento <span class="label-opcional">(opcional)</span></label>
+            <input
+              id="data-nasc"
+              v-model="dados.data_nascimento"
+              type="date"
+              class="input-date"
+            />
+          </div>
         </div>
 
         <p v-if="dadosErro" class="msg-erro" role="alert">{{ dadosErro }}</p>
@@ -193,7 +374,7 @@ async function togglePush() {
       </form>
     </section>
 
-    <!-- US-20: Notificações push — apenas para colaboradores -->
+    <!-- Push — apenas colaboradores -->
     <section v-if="authStore.user?.perfil === 'colaborador'" class="card">
       <h2 class="card-titulo">Notificações push</h2>
       <div class="push-row">
@@ -272,10 +453,124 @@ async function togglePush() {
   border-bottom: 1px solid var(--color-border);
 }
 
+/* Foto */
+.foto-area {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: var(--color-surface-2);
+  border: 2px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-inicial {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-gold);
+}
+
+.avatar-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.spinner-foto {
+  display: block;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.foto-acoes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: 1px solid var(--color-gold);
+  color: var(--color-gold);
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--color-gold) 10%, transparent);
+}
+
+.btn-secondary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.btn-remover {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--status-atrasada);
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.btn-remover:hover:not(:disabled) { border-color: var(--status-atrasada); }
+.btn-remover:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.input-oculto { display: none; }
+
+/* Formulário */
 .form {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.field--full { grid-column: 1 / -1; }
+
+@media (max-width: 480px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .field--full { grid-column: span 1; }
+  .foto-area { flex-direction: column; align-items: flex-start; }
 }
 
 .field {
@@ -295,7 +590,9 @@ label {
   font-size: 0.75rem;
 }
 
-input {
+input,
+.input-select,
+.input-date {
   background-color: var(--color-surface-2);
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -304,11 +601,28 @@ input {
   font-size: 0.9375rem;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-input:focus {
+.input-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.875rem center;
+  cursor: pointer;
+}
+
+input:focus,
+.input-select:focus,
+.input-date:focus {
   border-color: var(--color-gold);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-gold) 20%, transparent);
+}
+
+.input-date::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
 }
 
 .field-erro {

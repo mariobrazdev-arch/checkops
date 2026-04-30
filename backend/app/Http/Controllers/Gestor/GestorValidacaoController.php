@@ -7,27 +7,40 @@ use App\Http\Requests\RotinaDiaria\ReabrirRotinaRequest;
 use App\Http\Resources\RotinaDiariaDetalheResource;
 use App\Models\RotinaDiaria;
 use App\Services\RotinaDiariaService;
+use App\Traits\ResolvesEmpresaId;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class GestorValidacaoController extends Controller
 {
+    use ResolvesEmpresaId;
+
     public function __construct(private RotinaDiariaService $service) {}
+
     /**
-     * Lista rotinas realizadas do setor do gestor.
+     * Lista rotinas realizadas do setor do gestor (ou da empresa para super_admin).
      * Filtros: colaborador_id, data_inicio, data_fim
      * (US-14)
      */
     public function index(Request $request): JsonResponse
     {
-        $gestor = $request->user();
+        $user = $request->user();
 
-        $query = RotinaDiaria::with(['rotina', 'colaborador'])
-            ->whereHas('rotina', fn ($q) => $q->where('setor_id', $gestor->setor_id));
+        $query = RotinaDiaria::with(['rotina', 'colaborador', 'fotos']);
 
-        // status: 'realizada' (padrão para validação de fotos) ou qualquer valor, ou null para todos
+        if ($user->perfil === 'super_admin') {
+            // Super admin vê por empresa (setor_id opcional como filtro adicional)
+            $query->whereHas('rotina', fn ($q) => $q->where('empresa_id', $this->resolveEmpresaId($request)));
+        } else {
+            $query->whereHas('rotina', fn ($q) => $q->where('setor_id', $user->setor_id));
+        }
+
         if ($request->filled('status')) {
             $query->where('status', $request->status);
+        }
+
+        if ($request->filled('setor_id') && $user->perfil === 'super_admin') {
+            $query->whereHas('rotina', fn ($q) => $q->where('setor_id', $request->setor_id));
         }
 
         if ($request->filled('colaborador_id')) {
@@ -63,7 +76,7 @@ class GestorValidacaoController extends Controller
     {
         $this->authorize('view', $rotinaDiaria);
 
-        $rotinaDiaria->load(['rotina', 'colaborador']);
+        $rotinaDiaria->load(['rotina', 'colaborador', 'fotos']);
 
         return response()->json([
             'data' => new RotinaDiariaDetalheResource($rotinaDiaria),

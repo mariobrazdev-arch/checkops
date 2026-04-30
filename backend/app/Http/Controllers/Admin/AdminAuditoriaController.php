@@ -6,17 +6,20 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\AuditoriaResource;
 use App\Jobs\GerarAuditoriaCsv;
 use App\Models\Auditoria;
+use App\Traits\ResolvesEmpresaId;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AdminAuditoriaController extends Controller
 {
+    use ResolvesEmpresaId;
+
     /**
      * US-16 — Lista auditoria com filtros e paginação.
      */
     public function index(Request $request): JsonResponse
     {
-        $empresaId = $request->user()->empresa_id;
+        $empresaId = $this->resolveEmpresaId($request);
 
         $query = Auditoria::with('usuario')
             ->where('empresa_id', $empresaId)
@@ -57,7 +60,7 @@ class AdminAuditoriaController extends Controller
     public function exportar(Request $request): JsonResponse
     {
         $filtros = $request->only(['usuario_id', 'acao', 'entidade', 'data_inicio', 'data_fim']);
-        $filtros['empresa_id'] = $request->user()->empresa_id;
+        $filtros['empresa_id'] = $this->resolveEmpresaId($request);
 
         $jobId = (string) \Illuminate\Support\Str::uuid();
 
@@ -67,4 +70,3 @@ class AdminAuditoriaController extends Controller
         return response()->json(['job_id' => $jobId], 202);
     }
 }
-

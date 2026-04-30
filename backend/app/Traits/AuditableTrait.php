@@ -31,8 +31,13 @@ trait AuditableTrait
 
         $usuario = Auth::user();
 
+        // Super admin não tem empresa_id; tenta inferir pelo modelo auditado
+        $empresaId = $usuario->empresa_id
+            ?? $model->empresa_id
+            ?? ($model->getTable() === 'empresas' ? $model->getKey() : null);
+
         Auditoria::create([
-            'empresa_id'   => $usuario->empresa_id,
+            'empresa_id'   => $empresaId,
             'usuario_id'   => $usuario->id,
             'acao'         => $acao,
             'entidade'     => class_basename($model),

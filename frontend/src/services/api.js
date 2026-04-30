@@ -8,12 +8,18 @@ const api = axios.create({
   },
 })
 
-// Injeta Bearer token em todas as requisições
+// Injeta Bearer token e, quando super_admin tem contexto de empresa, o empresa_id
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+
+  const saEmpresaId = localStorage.getItem('sa_empresa_id')
+  if (saEmpresaId) {
+    config.params = { ...config.params, empresa_id: saEmpresaId }
+  }
+
   return config
 })
 

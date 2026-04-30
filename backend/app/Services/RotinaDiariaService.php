@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Rotina;
 use App\Models\RotinaDiaria;
+use App\Models\RotinaDiariaFoto;
 use App\Models\User;
 use Carbon\Carbon;
 
@@ -95,23 +96,30 @@ class RotinaDiariaService
         }
 
         // RN-03: se foto obrigatória, valida metadados de câmera
-        $fotoPath = null;
-        if ($rd->rotina->foto_obrigatoria) {
-            if (empty($dados['foto_base64'])) {
-                throw new \DomainException('Foto é obrigatória para esta rotina.');
-            }
+        $fotos = $dados['fotos_base64'] ?? [];
+        if ($rd->rotina->foto_obrigatoria && empty($fotos)) {
+            throw new \DomainException('Foto é obrigatória para esta rotina.');
+        }
 
-            // Valida metadados + registra alertas de auditoria se necessário
+        $primeiroCaminho = null;
+        if (!empty($fotos)) {
             $this->fotoService->validarMetadados($dados, $rd);
+            $paths = $this->fotoService->processarMultiplos($fotos, $dados, $rd);
 
-            // Salva PATH (nunca URL) — URL assinada gerada sob demanda pelo Resource (RN-10)
-            $fotoPath = $this->fotoService->processar($dados['foto_base64'], $dados, $rd);
+            foreach ($paths as $ordem => $path) {
+                RotinaDiariaFoto::create([
+                    'rotina_diaria_id' => $rd->id,
+                    'path'             => $path,
+                    'ordem'            => $ordem,
+                ]);
+            }
+            $primeiroCaminho = $paths[0];
         }
 
         $rd->update([
             'status'             => 'realizada',
-            'data_hora_resposta' => now(), // sempre horário do servidor — RN-03
-            'foto_url'           => $fotoPath,
+            'data_hora_resposta' => now(),
+            'foto_url'           => $primeiroCaminho,
             'foto_lat'           => $dados['foto_lat'] ?? null,
             'foto_lng'           => $dados['foto_lng'] ?? null,
             'foto_timestamp'     => isset($dados['foto_timestamp'])
@@ -120,7 +128,7 @@ class RotinaDiariaService
             'foto_device_id'     => $dados['foto_device_id'] ?? null,
         ]);
 
-        return $rd->fresh('rotina');
+        return $rd->fresh(['rotina', 'fotos']);
     }
 
     public function responderNao(RotinaDiaria $rd, string $justificativa): RotinaDiaria
@@ -204,6 +212,52 @@ class RotinaDiariaService
                 if ($rd->wasRecentlyCreated) {
                     $total++;
                 }
+            }
+        }
+
+        return $total;
+    }
+
+    // ─── Geração para novo colaborador criado durante o dia ─────────────────
+
+    public function gerarParaColaboradorHoje(User $colaborador): int
+    {
+        $data = today();
+        $total = 0;
+
+        $rotinas = Rotina::with('colaboradores')
+            ->where('status', 'ativa')
+            ->where('setor_id', $colaborador->setor_id)
+            ->where('data_inicio', '<=', $data->toDateString())
+            ->where(function ($q) use ($data) {
+                $q->whereNull('data_fim')
+                  ->orWhere('data_fim', '>=', $data->toDateString());
+            })
+            ->get();
+
+        foreach ($rotinas as $rotina) {
+            if (!$this->rotinaService->rotinaRodaNaData($rotina, $data)) {
+                continue;
+            }
+
+            // Se a rotina tem colaboradores específicos, Arlindo precisa estar na lista
+            if ($rotina->colaboradores->isNotEmpty()) {
+                if (!$rotina->colaboradores->contains('id', $colaborador->id)) {
+                    continue;
+                }
+            }
+
+            $rd = RotinaDiaria::firstOrCreate(
+                [
+                    'rotina_id'      => $rotina->id,
+                    'colaborador_id' => $colaborador->id,
+                    'data'           => $data->toDateString(),
+                ],
+                ['status' => 'pendente']
+            );
+
+            if ($rd->wasRecentlyCreated) {
+                $total++;
             }
         }
 

@@ -9,6 +9,7 @@ const carregando = ref(true)
 const salvando = ref(false)
 const sucesso = ref(false)
 const erros = ref({})
+const buscandoCep = ref(false)
 
 const form = reactive({
   nome: '',
@@ -17,9 +18,16 @@ const form = reactive({
   email: '',
   responsavel: '',
   status: 'ativo',
+  cep: '',
+  logradouro: '',
+  numero: '',
+  complemento: '',
+  bairro: '',
+  cidade: '',
+  estado: '',
 })
 
-// CNPJ: formatação e validação
+// ─── Máscaras ────────────────────────────────────────────────────────────────
 function formatarCNPJ(valor) {
   const num = valor.replace(/\D/g, '').slice(0, 14)
   return num
@@ -33,13 +41,52 @@ function onCNPJInput(e) {
   form.cnpj = formatarCNPJ(e.target.value)
 }
 
+function formatarTelefone(valor) {
+  const num = valor.replace(/\D/g, '').slice(0, 11)
+  if (num.length <= 10) {
+    return num
+      .replace(/^(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{4})(\d{1,4})$/, '$1-$2')
+  }
+  return num
+    .replace(/^(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d{1,4})$/, '$1-$2')
+}
+
+function onTelefoneInput(e) {
+  form.telefone = formatarTelefone(e.target.value)
+}
+
+function onCepInput(e) {
+  const num = e.target.value.replace(/\D/g, '').slice(0, 8)
+  form.cep = num.length > 5 ? num.replace(/^(\d{5})(\d)/, '$1-$2') : num
+  if (num.length === 8) buscarCep(num)
+}
+
+// ─── ViaCEP ──────────────────────────────────────────────────────────────────
+async function buscarCep(cep) {
+  buscandoCep.value = true
+  try {
+    const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
+    const data = await res.json()
+    if (!data.erro) {
+      form.logradouro = data.logradouro ?? ''
+      form.bairro     = data.bairro ?? ''
+      form.cidade     = data.localidade ?? ''
+      form.estado     = data.uf ?? ''
+    }
+  } catch { /* silencia */ } finally {
+    buscandoCep.value = false
+  }
+}
+
+// ─── Validação ───────────────────────────────────────────────────────────────
 function validarCNPJ(cnpj) {
   const num = cnpj.replace(/\D/g, '')
   if (num.length !== 14) return false
   if (/^(\d)\1{13}$/.test(num)) return false
   const calc = (tamanho) => {
-    let soma = 0
-    let pos = tamanho - 7
+    let soma = 0, pos = tamanho - 7
     for (let i = tamanho; i >= 1; i--) {
       soma += parseInt(num.charAt(tamanho - i)) * pos--
       if (pos < 2) pos = 9
@@ -61,17 +108,25 @@ function validar() {
   return Object.keys(e).length === 0
 }
 
+// ─── API ─────────────────────────────────────────────────────────────────────
 async function carregar() {
   carregando.value = true
   try {
     const { data } = await empresaService.buscar()
     const emp = data.data
-    form.nome = emp.nome ?? ''
-    form.cnpj = emp.cnpj ?? ''
-    form.telefone = emp.telefone ?? ''
-    form.email = emp.email ?? ''
+    form.nome        = emp.nome ?? ''
+    form.cnpj        = emp.cnpj     ? formatarCNPJ(emp.cnpj)         : ''
+    form.telefone    = emp.telefone ? formatarTelefone(emp.telefone) : ''
+    form.email       = emp.email ?? ''
     form.responsavel = emp.responsavel ?? ''
-    form.status = emp.status ?? 'ativo'
+    form.status      = emp.status ?? 'ativo'
+    form.cep         = emp.cep ?? ''
+    form.logradouro  = emp.logradouro ?? ''
+    form.numero      = emp.numero ?? ''
+    form.complemento = emp.complemento ?? ''
+    form.bairro      = emp.bairro ?? ''
+    form.cidade      = emp.cidade ?? ''
+    form.estado      = emp.estado ?? ''
   } catch {
     uiStore.addToast({ severity: 'error', summary: 'Erro ao carregar empresa', life: 3000 })
   } finally {
@@ -85,12 +140,19 @@ async function salvar() {
   sucesso.value = false
   try {
     await empresaService.atualizar({
-      nome: form.nome,
-      cnpj: form.cnpj,
-      telefone: form.telefone || null,
-      email: form.email || null,
+      nome:        form.nome,
+      cnpj:        form.cnpj.replace(/\D/g, ''),
+      telefone:    form.telefone ? form.telefone.replace(/\D/g, '') : null,
+      email:       form.email || null,
       responsavel: form.responsavel || null,
-      status: form.status,
+      status:      form.status,
+      cep:         form.cep ? form.cep.replace(/\D/g, '') : null,
+      logradouro:  form.logradouro || null,
+      numero:      form.numero || null,
+      complemento: form.complemento || null,
+      bairro:      form.bairro || null,
+      cidade:      form.cidade || null,
+      estado:      form.estado || null,
     })
     sucesso.value = true
     uiStore.addToast({ severity: 'success', summary: 'Empresa atualizada', life: 2500 })
@@ -129,6 +191,9 @@ onMounted(carregar)
 
     <section v-else class="card">
       <form class="form" @submit.prevent="salvar" novalidate>
+
+        <!-- Dados básicos -->
+        <p class="secao-titulo">Dados da empresa</p>
         <div class="form-grid">
           <div class="field field--full">
             <label for="emp-nome">Nome da empresa <span class="req">*</span></label>
@@ -159,7 +224,15 @@ onMounted(carregar)
 
           <div class="field">
             <label for="emp-telefone">Telefone</label>
-            <input id="emp-telefone" v-model="form.telefone" type="tel" placeholder="(00) 0000-0000" />
+            <input
+              id="emp-telefone"
+              :value="form.telefone"
+              type="tel"
+              placeholder="(00) 00000-0000"
+              inputmode="numeric"
+              maxlength="15"
+              @input="onTelefoneInput"
+            />
           </div>
 
           <div class="field">
@@ -173,7 +246,57 @@ onMounted(carregar)
           </div>
         </div>
 
-        <!-- Toggle status -->
+        <!-- Endereço -->
+        <p class="secao-titulo">Endereço</p>
+        <div class="form-grid">
+          <div class="field field--cep">
+            <label for="emp-cep">CEP</label>
+            <div class="input-cep-wrap">
+              <input
+                id="emp-cep"
+                :value="form.cep"
+                type="text"
+                placeholder="00000-000"
+                inputmode="numeric"
+                maxlength="9"
+                @input="onCepInput"
+              />
+              <span v-if="buscandoCep" class="spinner-cep" />
+            </div>
+          </div>
+
+          <div class="field field--logradouro">
+            <label for="emp-logradouro">Logradouro</label>
+            <input id="emp-logradouro" v-model="form.logradouro" type="text" placeholder="Rua, Av., etc." />
+          </div>
+
+          <div class="field field--numero">
+            <label for="emp-numero">Número</label>
+            <input id="emp-numero" v-model="form.numero" type="text" placeholder="123" />
+          </div>
+
+          <div class="field field--complemento">
+            <label for="emp-complemento">Complemento</label>
+            <input id="emp-complemento" v-model="form.complemento" type="text" placeholder="Sala, apto..." />
+          </div>
+
+          <div class="field">
+            <label for="emp-bairro">Bairro</label>
+            <input id="emp-bairro" v-model="form.bairro" type="text" />
+          </div>
+
+          <div class="field">
+            <label for="emp-cidade">Cidade</label>
+            <input id="emp-cidade" v-model="form.cidade" type="text" />
+          </div>
+
+          <div class="field field--uf">
+            <label for="emp-estado">UF</label>
+            <input id="emp-estado" v-model="form.estado" type="text" maxlength="2" placeholder="SP" style="text-transform:uppercase" />
+          </div>
+        </div>
+
+        <!-- Status -->
         <div class="status-row">
           <span class="status-label">Status</span>
           <button
@@ -208,7 +331,7 @@ onMounted(carregar)
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  max-width: 680px;
+  max-width: 720px;
 }
 
 .page-header { display: flex; flex-direction: column; gap: 0.25rem; }
@@ -240,18 +363,37 @@ onMounted(carregar)
 
 .form { display: flex; flex-direction: column; gap: 1.25rem; }
 
+.secao-titulo {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-gold);
+  margin: 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
 }
 
+.field--full        { grid-column: 1 / -1; }
+.field--cep         { grid-column: span 1; }
+.field--logradouro  { grid-column: span 2; }
+.field--numero      { grid-column: span 1; }
+.field--complemento { grid-column: span 1; }
+.field--uf          { grid-column: span 1; }
+
 @media (max-width: 560px) {
   .form-grid { grid-template-columns: 1fr; }
+  .field--logradouro,
+  .field--complemento { grid-column: span 1; }
 }
 
 .field { display: flex; flex-direction: column; gap: 0.3rem; }
-.field--full { grid-column: 1 / -1; }
 
 label {
   font-size: 0.8125rem;
@@ -270,6 +412,8 @@ input {
   font-size: 0.9375rem;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 input:focus {
@@ -282,6 +426,24 @@ input:focus {
 }
 
 .field-erro { font-size: 0.75rem; color: var(--status-atrasada); }
+
+.input-cep-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.spinner-cep {
+  position: absolute;
+  right: 0.75rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-gold);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
 
 /* Toggle */
 .status-row {

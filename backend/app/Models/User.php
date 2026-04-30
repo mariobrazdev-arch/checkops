@@ -24,6 +24,10 @@ class User extends Authenticatable
         'nome',
         'email',
         'telefone',
+        'cpf',
+        'sexo',
+        'data_nascimento',
+        'foto_perfil_path',
         'matricula',
         'cargo',
         'perfil',
@@ -39,7 +43,8 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'password' => 'hashed',
+            'password'        => 'hashed',
+            'data_nascimento' => 'date',
         ];
     }
 

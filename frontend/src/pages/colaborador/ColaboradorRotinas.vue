@@ -50,12 +50,13 @@ function iniciarSim(rotina) {
 async function onFotoCapturada(payload) {
   cameraAberta.value = false
   if (!rotinaRespondendo.value) return
+  const primeira = payload.fotos?.[0] ?? {}
   await store.responderSim(rotinaRespondendo.value.id, {
-    foto_base64:   payload.base64,
-    foto_timestamp: payload.timestamp,
-    foto_device_id: payload.deviceId,
-    foto_lat:       payload.lat,
-    foto_lng:       payload.lng,
+    fotos_base64:   payload.fotos.map(f => f.base64),
+    foto_timestamp: primeira.timestamp,
+    foto_device_id: primeira.deviceId,
+    foto_lat:       primeira.lat,
+    foto_lng:       primeira.lng,
   })
   rotinaRespondendo.value = null
 }

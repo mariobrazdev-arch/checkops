@@ -42,6 +42,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/me', [AuthController::class, 'me']);
             Route::get('/perfil', [PerfilController::class, 'show']);
             Route::put('/perfil', [PerfilController::class, 'update']);
+            Route::post('/perfil/foto', [PerfilController::class, 'uploadFoto']);
+            Route::delete('/perfil/foto', [PerfilController::class, 'removerFoto']);
         });
 
         // Push subscriptions — qualquer perfil autenticado (US-20)
@@ -56,14 +58,14 @@ Route::prefix('v1')->group(function () {
         });
 
         // ─── Admin ────────────────────────────────────────────────────────
-        Route::middleware('perfil:admin')->prefix('admin')->name('admin.')->group(function () {
+        Route::middleware('perfil:admin,super_admin')->prefix('admin')->name('admin.')->group(function () {
 
             // Empresa
             Route::get('/empresa', [AdminEmpresaController::class, 'show']);
             Route::put('/empresa', [AdminEmpresaController::class, 'update']);
 
             // Setores
-            Route::apiResource('/setores', AdminSetoresController::class);
+            Route::apiResource('/setores', AdminSetoresController::class)->parameters(['setores' => 'setor']);
 
             // Usuários
             Route::apiResource('/usuarios', AdminUsuariosController::class);
@@ -77,6 +79,7 @@ Route::prefix('v1')->group(function () {
 
             // Relatórios (US-19)
             Route::get('/relatorios',                    [AdminRelatoriosController::class, 'index']);
+            Route::get('/relatorios/resumo',             [AdminRelatoriosController::class, 'resumo']);
             Route::post('/relatorios/exportar',          [AdminRelatoriosController::class, 'exportar']);
             Route::get('/relatorios/status/{jobId}',     [AdminRelatoriosController::class, 'status']);
 
@@ -86,7 +89,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // ─── Gestor ───────────────────────────────────────────────────────
-        Route::middleware('perfil:gestor,admin')->prefix('gestor')->name('gestor.')->group(function () {
+        Route::middleware('perfil:gestor,admin,super_admin')->prefix('gestor')->name('gestor.')->group(function () {
 
             Route::get('/setor', [GestorSetorController::class, 'show']);
             Route::put('/setor', [GestorSetorController::class, 'update']);

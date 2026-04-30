@@ -45,7 +45,14 @@ export function useRotinas() {
       uiStore.addToast({ severity: 'success', summary: id ? 'Rotina atualizada' : 'Rotina criada' })
       return true
     } catch (e) {
-      uiStore.addToast({ severity: 'error', summary: e?.response?.data?.message ?? 'Erro ao salvar rotina' })
+      const erros = e?.response?.data?.errors
+      const detalhe = erros ? Object.values(erros).flat()[0] : null
+      uiStore.addToast({
+        severity: 'error',
+        summary: e?.response?.data?.message ?? 'Erro ao salvar rotina',
+        detail: detalhe ?? undefined,
+        life: 6000,
+      })
       return false
     } finally {
       salvando.value = false

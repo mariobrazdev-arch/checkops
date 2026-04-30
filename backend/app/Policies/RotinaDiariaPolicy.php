@@ -14,11 +14,10 @@ class RotinaDiariaPolicy
 
     public function view(User $user, RotinaDiaria $rotinaDiaria): bool
     {
-        if ($user->perfil === 'admin') return true;
+        if (in_array($user->perfil, ['admin', 'super_admin'])) return true;
         if ($user->perfil === 'gestor') {
             return $rotinaDiaria->rotina->setor_id === $user->setor_id;
         }
-        // colaborador: apenas a própria
         return $rotinaDiaria->colaborador_id === $user->id;
     }
 
@@ -30,7 +29,7 @@ class RotinaDiariaPolicy
 
     public function reabrir(User $user, RotinaDiaria $rotinaDiaria): bool
     {
-        if ($user->perfil === 'admin') return true;
+        if (in_array($user->perfil, ['admin', 'super_admin'])) return true;
         if ($user->perfil === 'gestor') {
             return $rotinaDiaria->rotina->setor_id === $user->setor_id;
         }

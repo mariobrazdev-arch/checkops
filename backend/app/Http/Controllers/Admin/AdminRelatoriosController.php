@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\RotinaDiariaDetalheResource;
 use App\Jobs\GerarRelatorioCsv;
 use App\Models\RotinaDiaria;
+use App\Traits\ResolvesEmpresaId;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -13,37 +14,14 @@ use Illuminate\Support\Str;
 
 class AdminRelatoriosController extends Controller
 {
+    use ResolvesEmpresaId;
+
     /**
      * US-19 — Listagem paginada de rotinas_diarias com filtros completos.
      */
     public function index(Request $request): JsonResponse
     {
-        $empresaId = $request->user()->empresa_id;
-
-        $query = RotinaDiaria::with(['rotina.setor', 'colaborador'])
-            ->whereHas('rotina', fn ($q) => $q->where('empresa_id', $empresaId))
-            ->orderByDesc('data')
-            ->orderByDesc('created_at');
-
-        if ($request->filled('setor_id')) {
-            $query->whereHas('rotina', fn ($q) => $q->where('setor_id', $request->setor_id));
-        }
-        if ($request->filled('colaborador_id')) {
-            $query->where('colaborador_id', $request->colaborador_id);
-        }
-        if ($request->filled('rotina_id')) {
-            $query->where('rotina_id', $request->rotina_id);
-        }
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-        if ($request->filled('data_inicio')) {
-            $query->whereDate('data', '>=', $request->data_inicio);
-        }
-        if ($request->filled('data_fim')) {
-            $query->whereDate('data', '<=', $request->data_fim);
-        }
-
+        $query = $this->baseQuery($request);
         $paginated = $query->paginate(50);
 
         return response()->json([
@@ -58,6 +36,61 @@ class AdminRelatoriosController extends Controller
     }
 
     /**
+     * KPIs totalizados para os filtros ativos.
+     */
+    public function resumo(Request $request): JsonResponse
+    {
+        $rows = $this->baseQuery($request)
+            ->reorder()
+            ->selectRaw("status, count(*) as total")
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $total         = $rows->sum();
+        $realizadas    = (int) ($rows['realizada']     ?? 0);
+        $naoRealizadas = (int) ($rows['nao_realizada'] ?? 0);
+        $atrasadas     = (int) ($rows['atrasada']      ?? 0);
+        $pendentes     = (int) ($rows['pendente']      ?? 0);
+        $conformidade  = $total > 0 ? round($realizadas / $total * 100, 1) : 0.0;
+
+        return response()->json(['data' => compact(
+            'total', 'realizadas', 'naoRealizadas', 'atrasadas', 'pendentes', 'conformidade'
+        )]);
+    }
+
+    private function baseQuery(Request $request)
+    {
+        $empresaId = $this->resolveEmpresaId($request);
+
+        $query = RotinaDiaria::with(['rotina.setor', 'colaborador', 'fotos'])
+            ->whereHas('rotina', fn ($q) => $q->where('empresa_id', $empresaId))
+            ->orderByDesc('data')
+            ->orderByDesc('created_at');
+
+        if ($request->filled('setor_id')) {
+            $query->whereHas('rotina', fn ($q) => $q->where('setor_id', $request->setor_id));
+        }
+        if ($request->filled('colaborador')) {
+            $query->whereHas('colaborador', fn ($q) => $q->where('nome', 'ilike', '%'.$request->colaborador.'%'));
+        }
+        if ($request->filled('rotina')) {
+            $query->whereHas('rotina', fn ($q) => $q->where('titulo', 'ilike', '%'.$request->rotina.'%'));
+        }
+        if ($request->filled('status')) {
+            $statuses = explode(',', $request->status);
+            $query->whereIn('status', $statuses);
+        }
+        if ($request->filled('data_inicio')) {
+            $query->whereDate('data', '>=', $request->data_inicio);
+        }
+        if ($request->filled('data_fim')) {
+            $query->whereDate('data', '<=', $request->data_fim);
+        }
+
+        return $query;
+    }
+
+    /**
      * US-19 — Dispara geração de CSV em background.
      */
     public function exportar(Request $request): JsonResponse
@@ -66,7 +99,7 @@ class AdminRelatoriosController extends Controller
             'setor_id', 'colaborador_id', 'rotina_id',
             'status', 'data_inicio', 'data_fim',
         ]);
-        $filtros['empresa_id'] = $request->user()->empresa_id;
+        $filtros['empresa_id'] = $this->resolveEmpresaId($request);
 
         $jobId = (string) Str::uuid();
 
@@ -87,4 +120,3 @@ class AdminRelatoriosController extends Controller
         return response()->json(compact('status', 'url'));
     }
 }
-

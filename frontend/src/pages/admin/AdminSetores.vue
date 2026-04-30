@@ -51,7 +51,7 @@ function abrirEditar(setor) {
   editandoId.value = setor.id
   form.nome = setor.nome
   form.descricao = setor.descricao ?? ''
-  form.gestor_id = setor.gestor_id ?? ''
+  form.gestor_id = setor.gestor_id ?? setor.gestor?.id ?? ''
   form.status = setor.status
   errosForm.value = {}
   dialogVisivel.value = true
@@ -120,10 +120,6 @@ onMounted(() => {
 import { onUnmounted } from 'vue'
 onUnmounted(() => window.removeEventListener('resize', onResize))
 
-function nomeGestor(gestor_id) {
-  const g = gestores.value.find((u) => u.id === gestor_id)
-  return g?.nome ?? '—'
-}
 </script>
 
 <template>
@@ -178,7 +174,7 @@ function nomeGestor(gestor_id) {
         <tbody>
           <tr v-for="setor in setoresFiltrados" :key="setor.id">
             <td class="td-nome">{{ setor.nome }}</td>
-            <td>{{ nomeGestor(setor.gestor_id) }}</td>
+            <td>{{ setor.gestor?.nome ?? '—' }}</td>
             <td>
               <span class="badge" :class="setor.status === 'ativo' ? 'badge--ativo' : 'badge--inativo'">
                 {{ setor.status === 'ativo' ? 'Ativo' : 'Inativo' }}
@@ -210,7 +206,7 @@ function nomeGestor(gestor_id) {
         </div>
         <p v-if="setor.descricao" class="card-item-desc">{{ setor.descricao }}</p>
         <p class="card-item-gestor">
-          <i class="pi pi-user" /> {{ nomeGestor(setor.gestor_id) }}
+          <i class="pi pi-user" /> {{ setor.gestor?.nome ?? '—' }}
         </p>
         <div class="card-item-acoes">
           <button class="btn-ghost" @click="abrirEditar(setor)">

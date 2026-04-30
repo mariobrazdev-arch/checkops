@@ -179,7 +179,10 @@ onMounted(() => buscar(1))
           >
             <!-- Miniatura -->
             <div class="thumb-wrap">
-              <img v-if="item.foto_url" :src="item.foto_url" class="thumb" alt="Foto" />
+              <template v-if="item.foto_url || item.fotos?.length">
+                <img :src="item.fotos?.[0]?.url ?? item.foto_url" class="thumb" alt="Foto" />
+                <span v-if="(item.fotos?.length ?? 0) > 1" class="thumb-count">{{ item.fotos.length }}</span>
+              </template>
               <div v-else class="thumb thumb--sem-foto">
                 <i class="pi pi-image" />
               </div>
@@ -302,10 +305,16 @@ onMounted(() => buscar(1))
 }
 .card-validacao:hover { border-color: var(--color-gold); background: var(--color-surface-2); }
 
-.thumb-wrap { flex-shrink: 0; }
+.thumb-wrap { flex-shrink: 0; position: relative; }
 .thumb {
   width: 60px; height: 60px; object-fit: cover;
   border-radius: 8px; display: block;
+}
+.thumb-count {
+  position: absolute; bottom: 3px; right: 3px;
+  background: rgba(0,0,0,0.7); color: #fff;
+  font-size: 0.65rem; font-weight: 700; border-radius: 99px;
+  padding: 0.1rem 0.35rem; backdrop-filter: blur(4px);
 }
 .thumb--sem-foto {
   width: 60px; height: 60px; border-radius: 8px;
